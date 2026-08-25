@@ -1,0 +1,33 @@
+[project]
+name = "omol-d4"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "lukasmki", email = "lukasarus@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "ase>=3.29.0",
+    "dftd4>=4.2.0",
+    "matplotlib>=3.11.1",
+    "molify>=0.2.6",
+    "polars>=1.44.0",
+    "typer>=0.27.1",
+]
+
+[project.scripts]
+omold4 = "omol_d4.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: longer sampling runs"]
