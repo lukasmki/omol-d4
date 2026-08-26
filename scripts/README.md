@@ -8,23 +8,29 @@ Python.
 | Script | Package entry point | What it does |
 | --- | --- | --- |
 | `0-profile.py` | `omol_d4.profiling.size_sweep` / `cutoff_scan` | Optional. Times UMA against the D4 three-body term, by box size or by ATM cutoff, so you can decide whether an on-the-fly `--three-body` run is affordable. |
+| `0-profile-threads.py` | `omol_d4.profiling.thread_scan` | Optional. Times the D4 three-body term against `OMP_NUM_THREADS`, to decide how many cores that run is worth giving. |
 | `1-nvt.py` | `omol_d4.nvt.run_nvt` | Stage 1. Builds a periodic water box at the experimental density and equilibrates it at fixed volume. |
 | `2-npt.py` | `omol_d4.npt.run_npt`, `omol_d4.analysis` | Stage 2. Lets the volume float at 298 K / 1 atm, streams the volume trace, and reports the density, its error bar and the compressibility. |
 
 ## SLURM
 
 `run-UMA.slurm` and `run-UMA-D4.slurm` submit the two arms of the comparison
-(UMA alone, and UMA + D4 three-body) at NERSC. `run-profile.slurm` runs stage 0
-first, so you can size the three-body arm before committing 48 hours to it —
-it is short enough for the debug QOS. All three require `omol-d4` to be
-installed in the venv they activate, and export the same `OMP_NUM_THREADS`,
-which the profile has to match for its timings to transfer.
+(UMA alone, and UMA + D4 three-body) at NERSC. `run-profile.slurm` and
+`run-profile-threads.slurm` run stage 0 first, so you can size the three-body
+arm before committing 48 hours to it — both are short enough for the debug QOS.
+All of them require `omol-d4` to be installed in the venv they activate.
 
 ```sh
-sbatch run-profile.slurm                              # decide the box size
+sbatch run-profile.slurm                              # box size and ATM cutoff
+sbatch run-profile-threads.slurm                      # how many cores to ask for
 JOB=$(sbatch --parsable run-UMA.slurm)                # stage 1 + baseline NPT
 sbatch --dependency=afterok:$JOB run-UMA-D4.slurm     # three-body arm
 ```
+
+`run-profile.slurm` exports the same `OMP_NUM_THREADS` as the production jobs,
+which its timings have to match to transfer. `run-profile-threads.slurm`
+deliberately does not: that variable is the one it sweeps, and it sets it per
+subprocess instead.
 
 ## Usage
 

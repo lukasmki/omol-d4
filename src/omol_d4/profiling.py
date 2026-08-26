@@ -10,7 +10,11 @@ starting one. Two things dominate the answer and both are measured here:
     three-body pressure is.
 """
 
+import ctypes
+import json
 import os
+import subprocess
+import sys
 import time
 
 import numpy as np
@@ -29,6 +33,17 @@ from .constants import EV_PER_A3_TO_BAR, SEED
 
 TIMESTEP_FS = 0.5      # only used to project MD throughput
 JITTER = 0.005         # A, per call, to defeat the calculators' result caches
+
+# Thread counts for `thread_scan`. Powers of two up to a full Perlmutter CPU
+# node; counts above the visible core count are still measured, and flagged.
+DEFAULT_THREAD_COUNTS = (1, 2, 4, 8, 16, 32, 64, 128)
+
+# How a worker subprocess hands its measurement back to `thread_scan`. The
+# worker is spawned with -c rather than -m: `omol_d4/__init__.py` already
+# imports this module, and re-running it under -m warns about the duplicate.
+WORKER_MARKER = "@@omol_d4.profiling@@ "
+WORKER_COMMAND = ("import sys; from omol_d4.profiling import _worker_main; "
+                  "_worker_main(sys.argv)")
 
 # dftd4's own default three-body cutoff, for the "images" column of a scan that
 # includes the library default alongside explicit cutoffs.
@@ -229,3 +244,174 @@ def write_rows(rows, path):
             fh.write(",".join(f"{row.get(k, '')}" for k in fields) + "\n")
     print(f"\nWrote {path}")
     return path
+
+
+# ---------------------------------------------------------------------------
+# OpenMP thread scaling
+# ---------------------------------------------------------------------------
+# dftd4 is the OpenMP-parallel half of the calculator and the ATM triple sum is
+# what an on-the-fly three-body run spends its time in, so how well that sum
+# scales decides how many cores are worth asking for.
+#
+# OMP_NUM_THREADS is read by the OpenMP runtime when it loads, which is the
+# first time dftd4 is imported. Re-assigning os.environ afterwards does nothing
+# at all, so a scan inside one process would silently report the same thread
+# count for every point. `omp_set_num_threads` would take effect, but it leaves
+# the thread affinity established at load time in place, which is not what a
+# fresh job with OMP_PROC_BIND set would do. So each point is measured in its
+# own subprocess, exactly as the batch script would launch it.
+
+
+def omp_max_threads():
+    """What the OpenMP runtime itself reports, or None if it cannot be probed.
+
+    Worth recording next to every timing: it is the only direct evidence that
+    OMP_NUM_THREADS was actually honoured, and a dftd4 built without OpenMP
+    shows up here rather than as a mysteriously flat scaling curve.
+    """
+    try:
+        return int(ctypes.CDLL(None).omp_get_max_threads())
+    except Exception:  # noqa: BLE001 - a probe, never worth failing a run over
+        return None
+
+
+def d4_timing(n_side=4, functional="pbe", disp3_cutoff=DISP3_CUTOFF, n_calls=5,
+              warmup=2, seed=SEED):
+    """Time one ATM-only D4 force+stress evaluation. Returns a plain dict.
+
+    Plain data rather than arrays because this is what a worker subprocess
+    serialises back to `thread_scan`.
+    """
+    atoms = _probe_box(n_side)
+    d4 = make_d4_atm(functional, disp3_cutoff=disp3_cutoff, quiet=True)
+
+    probe = atoms.copy()
+    probe.calc = d4
+    pressure = -probe.get_stress()[:3].mean() * EV_PER_A3_TO_BAR
+
+    # device="cpu": dftd4 is CPU-only, so there is no GPU queue to drain.
+    times = time_calculator(atoms.copy(), d4, n_calls, "cpu", warmup=warmup,
+                            rng=np.random.default_rng(seed))
+    return {
+        "n_mol": n_molecules(atoms),
+        "n_atoms": len(atoms),
+        "cell_A": float(atoms.cell.lengths()[0]),
+        "disp3_cutoff_A": disp3_cutoff,
+        "d4_ms": float(times.mean() * 1e3),
+        "d4_std_ms": float(times.std() * 1e3),
+        "p_atm_bar": float(pressure),
+        "omp_max_threads": omp_max_threads(),
+    }
+
+
+def thread_scan(threads=DEFAULT_THREAD_COUNTS, n_side=4, task=TASK,
+                functional=None, disp3_cutoff=DISP3_CUTOFF, n_calls=5,
+                warmup=2, seed=SEED):
+    """Time the D4 ATM term once per OMP_NUM_THREADS value. Returns rows.
+
+    Each point runs in a fresh subprocess with OMP_NUM_THREADS set before the
+    OpenMP runtime loads; everything else in the environment (OMP_PLACES,
+    OMP_PROC_BIND, the CPU binding SLURM applied) is inherited, so the numbers
+    describe the job this is running inside.
+
+    Speedup and efficiency are relative to the *first* thread count measured,
+    which is not always 1: a serial call at an expensive cutoff can take
+    minutes, so a scan may reasonably start at 8. Efficiency is scaled by the
+    same baseline, so the first row is 100% either way.
+    """
+    functional = functional or functional_for(task)
+    visible = os.cpu_count()
+    print(f"\nD4 three-body OpenMP scaling ({functional} damping), "
+          f"{n_side**3} H2O, disp3 cutoff "
+          f"{'library default' if disp3_cutoff is None else f'{disp3_cutoff:.1f} A'}")
+    print(f"  {len(threads)} subprocesses, {visible} cores visible; speedup "
+          f"and efficiency are relative to {threads[0]} thread"
+          f"{'' if threads[0] == 1 else 's'}")
+    print(f"\n{'threads':>8} {'omp_seen':>9} {'D4/ms':>18} {'speedup':>8} "
+          f"{'efficiency':>11} {'P_ATM/bar':>11}")
+    print("-" * 70)
+
+    payload = {"n_side": n_side, "functional": functional,
+               "disp3_cutoff": disp3_cutoff, "n_calls": n_calls,
+               "warmup": warmup, "seed": seed}
+
+    rows, baseline_ms, baseline_threads = [], None, threads[0]
+    for n_threads in threads:
+        result = _run_worker(payload, n_threads)
+
+        if baseline_ms is None:
+            baseline_ms = result["d4_ms"]
+        speedup = baseline_ms / result["d4_ms"]
+        efficiency = speedup / (n_threads / baseline_threads) * 100
+        seen = result["omp_max_threads"]
+
+        row = {"mode": "threads", "threads": n_threads,
+               "baseline_threads": baseline_threads, "speedup": speedup,
+               "efficiency_pct": efficiency, **result}
+        rows.append(row)
+
+        flag = "  (oversubscribed)" if visible and n_threads > visible else ""
+        print(f"{n_threads:8d} {'?' if seen is None else seen:>9} "
+              f"{result['d4_ms']:9.1f} +/- {result['d4_std_ms']:6.1f} "
+              f"{speedup:8.2f} {efficiency:10.1f}% "
+              f"{result['p_atm_bar']:11.1f}{flag}")
+
+    _warn_about_the_scan(rows, visible)
+    return rows
+
+
+def _run_worker(payload, n_threads):
+    """Measure one point in a subprocess with OMP_NUM_THREADS pre-set."""
+    env = dict(os.environ, OMP_NUM_THREADS=str(n_threads))
+    proc = subprocess.run(
+        [sys.executable, "-c", WORKER_COMMAND, json.dumps(payload)],
+        capture_output=True, text=True, env=env,
+    )
+    for line in proc.stdout.splitlines():
+        if line.startswith(WORKER_MARKER):
+            return json.loads(line[len(WORKER_MARKER):])
+    raise RuntimeError(
+        f"profiling worker failed at OMP_NUM_THREADS={n_threads} "
+        f"(exit {proc.returncode}):\n{proc.stderr or proc.stdout}"
+    )
+
+
+def _warn_about_the_scan(rows, visible):
+    """Call out the two ways this measurement is commonly misread."""
+    seen = {r["omp_max_threads"] for r in rows}
+    if seen == {None}:
+        print("\n  note: the OpenMP runtime could not be probed, so there is "
+              "no confirmation that OMP_NUM_THREADS was honoured.")
+    elif len(seen) == 1:
+        print(f"\n  WARNING: every run reported {seen.pop()} threads, so "
+              "OMP_NUM_THREADS is not reaching the dispersion library - it may "
+              "have been built without OpenMP. The timings below are all the "
+              "same configuration.")
+
+    pressures = np.array([r["p_atm_bar"] for r in rows])
+    if np.ptp(pressures) > 1e-6 * abs(pressures).max():
+        print("  note: P_ATM should not depend on the thread count; a spread "
+              "here means the parallel sum is not reproducible.")
+
+    if visible:
+        useful = [r for r in rows if r["threads"] <= visible]
+        if len(useful) > 1:
+            best = max(useful, key=lambda r: r["speedup"])
+            print(f"\n  Best speedup within the {visible} visible cores: "
+                  f"{best['speedup']:.1f}x at {best['threads']} threads "
+                  f"({best['efficiency_pct']:.0f}% efficiency). Past the knee "
+                  "the extra cores buy little, and on a shared node they are "
+                  "better spent elsewhere.")
+
+
+def _worker_main(argv):
+    """Measure one point and print it for the parent; see `thread_scan`.
+
+    Spawned via WORKER_COMMAND. To reproduce a single point by hand:
+
+        OMP_NUM_THREADS=8 python -c "import sys; \
+            from omol_d4.profiling import _worker_main; _worker_main(sys.argv)" \
+            '{"n_side": 4, "functional": "pbe", "disp3_cutoff": 12.0}'
+    """
+    result = d4_timing(**json.loads(argv[1]))
+    print(WORKER_MARKER + json.dumps(result))
