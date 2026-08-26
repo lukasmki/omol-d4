@@ -15,18 +15,27 @@ from ase import units
 from ase.md.langevin import Langevin
 from ase.parallel import world
 
-import networkx as nx
-from molify import ase2networkx
-
 
 class NPTLangevinMonteCarloBarostat(Langevin):
+    """Langevin dynamics with OpenMM's Monte Carlo barostat.
+
+    Parameters mirror ``MonteCarloBarostat``: ``bsinterval`` is OpenMM's
+    ``frequency`` (0 disables the barostat) and ``volume_scale`` is its
+    ``volumeScale`` (default 1% of the initial volume).
+
+    Volume moves scale every atom independently, which is OpenMM's
+    ``scaleMoleculesAsRigid=false`` mode: the acceptance weight therefore counts
+    atoms, matching ``getNumParticles()``. Trial moves consequently strain
+    intramolecular coordinates as well as the intermolecular ones.
+    """
+
     def __init__(
         self,
         atoms,
         timestep,
         pressure_au=1.01325 * units.bar,
         bsinterval=25,
-        volume_scale=1.0,
+        volume_scale=None,
         temperature=None,
         friction=None,
         fixcm=True,
@@ -54,17 +63,44 @@ class NPTLangevinMonteCarloBarostat(Langevin):
             append_trajectory=append_trajectory,
         )
         self.pressure = pressure_au
-        self.volume_scale = volume_scale  # scales random move (i.e. +- 1.0 cubic Å)
-        self.bsinterval = bsinterval  # monte carlo move interval
+        self.bsinterval = bsinterval  # monte carlo move interval (0 disables)
 
-        # Windowed counters, reset every 10 attempts to drive the adaptive
-        # volume_scale rescaling below (matches OpenMM's own bookkeeping).
+        # A volume move scales the coordinates of `nscaled` independent
+        # particles, and that same count enters the acceptance weight. Atoms are
+        # scaled individually, so both are the atom count.
+        self.nscaled = len(atoms)
+
+        volume = atoms.get_volume()
+        if volume_scale is None:
+            volume_scale = 0.01 * volume
+        if not 0.0 < volume_scale <= 0.3 * volume:
+            raise ValueError(
+                f"volume_scale must be in (0, {0.3 * volume:.4g}] A^3 "
+                f"(30% of the cell volume), got {volume_scale:.4g}"
+            )
+        self.volume_scale = volume_scale
+
+        # Steps since the last barostat move (OpenMM's `step` member).
+        self.steps_since_move = 0
+
+        # Windowed counters, driving the adaptive volume_scale rescaling below.
         self.num_attempted = 0
         self.num_accepted = 0
         # Cumulative counters, never reset, purely for reporting whether the
         # barostat is actually moving at all (e.g. get_acceptance_ratio()).
         self.total_attempted = 0
         self.total_accepted = 0
+
+    def _scale_coordinates(self, new_cell, length_scale):
+        """Apply an isotropic box scaling to the box and to every atom.
+
+        Equivalent to ``set_cell(..., scale_atoms=True)`` for the isotropic
+        moves proposed here, written out to mirror OpenMM's
+        ``scaleCoordinates``.
+        """
+        positions = self.atoms.get_positions() * length_scale
+        self.atoms.set_cell(new_cell, scale_atoms=False)
+        self.atoms.set_positions(positions)
 
     def get_acceptance_ratio(self):
         """Cumulative (accepted, attempted, ratio) since construction."""
@@ -80,52 +116,56 @@ class NPTLangevinMonteCarloBarostat(Langevin):
         # Langevin integrator step
         forces = super().step(forces)
 
-        if self.get_number_of_steps() == 0:
+        if self.bsinterval == 0:
             return forces
+        self.steps_since_move += 1
+        if self.steps_since_move < self.bsinterval:
+            return forces
+        self.steps_since_move = 0
 
         # Monte Carlo Barostat
-        if self.get_number_of_steps() % self.bsinterval == 0:
-            natoms = len(self.atoms)
 
-            # get current
-            old_cell = self.atoms.get_cell()
-            old_volume = self.atoms.get_volume()
-            old_energy = self.atoms.get_potential_energy()
+        # get current
+        old_cell = self.atoms.get_cell()
+        old_positions = self.atoms.get_positions()
+        old_volume = self.atoms.get_volume()
+        old_energy = self.atoms.get_potential_energy()
 
-            # propose a change of volume
-            dV = self.volume_scale * self.rng.uniform(-1, 1)
-            new_volume = old_volume + dV
+        # propose a change of volume
+        dV = self.volume_scale * self.rng.uniform(-1, 1)
+        new_volume = old_volume + dV
 
-            # scale box and get new energy
-            length_scale = np.power(new_volume / old_volume, 1.0 / 3.0)
-            new_cell = length_scale * old_cell
-            self.atoms.set_cell(new_cell, scale_atoms=True)
-            new_energy = self.atoms.get_potential_energy()
+        # scale box and get new energy
+        length_scale = np.power(new_volume / old_volume, 1.0 / 3.0)
+        new_cell = length_scale * old_cell
+        self._scale_coordinates(new_cell, length_scale)
+        new_energy = self.atoms.get_potential_energy()
 
-            # accept or reject
-            dE = new_energy - old_energy
-            pdV = self.pressure * dV
-            kT = self.temp  # kT
-            w = dE + pdV - natoms * kT * np.log(new_volume / old_volume)
-            if (w > 0) and (self.rng.uniform() > np.exp(-w / kT)):
-                # reject
-                self.atoms.set_cell(old_cell, scale_atoms=True)
-            else:
-                # accept
-                self.num_accepted += 1
-                self.total_accepted += 1
-            self.num_attempted += 1
-            self.total_attempted += 1
+        # accept or reject
+        dE = new_energy - old_energy
+        pdV = self.pressure * dV
+        kT = self.temp  # kT
+        w = dE + pdV - self.nscaled * kT * np.log(new_volume / old_volume)
+        if (w > 0) and (self.rng.uniform() > np.exp(-w / kT)):
+            # reject: restore the pre-move state exactly
+            self.atoms.set_cell(old_cell, scale_atoms=False)
+            self.atoms.set_positions(old_positions)
+        else:
+            # accept
+            self.num_accepted += 1
+            self.total_accepted += 1
+        self.num_attempted += 1
+        self.total_attempted += 1
 
-            # move rescaling (for parity with OpenMM MonteCarloBarostat)
-            if self.num_attempted >= 10:
-                if self.num_accepted < 0.25 * self.num_attempted:
-                    self.volume_scale /= 1.1
-                    self.num_attempted = 0
-                    self.num_accepted = 0
-                elif self.num_accepted > 0.75 * self.num_attempted:
-                    self.volume_scale = min(self.volume_scale * 1.1, old_volume * 0.3)
-                    self.num_attempted = 0
-                    self.num_accepted = 0
+        # move rescaling (for parity with OpenMM MonteCarloBarostat)
+        if self.num_attempted >= 10:
+            if self.num_accepted < 0.25 * self.num_attempted:
+                self.volume_scale /= 1.1
+                self.num_attempted = 0
+                self.num_accepted = 0
+            elif self.num_accepted > 0.75 * self.num_attempted:
+                self.volume_scale = min(self.volume_scale * 1.1, old_volume * 0.3)
+                self.num_attempted = 0
+                self.num_accepted = 0
 
         return forces

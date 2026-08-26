@@ -16,6 +16,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 
 N_ATOMS_PER_WATER = 3
+OH_BOND = 0.9572
 
 
 class ZeroCalculator(Calculator):
@@ -44,7 +45,7 @@ class IntramolecularSpring(Calculator):
 
     implemented_properties = ["energy", "free_energy", "forces"]
 
-    def __init__(self, k=10.0, r0=0.9572, **kwargs):
+    def __init__(self, k=10.0, r0=OH_BOND, **kwargs):
         super().__init__(**kwargs)
         self.k = k
         self.r0 = r0
@@ -99,9 +100,13 @@ class ScriptedRNG:
 
 def water_box(n_molecules=8, cell=12.0, calculator=None):
     """Cubic periodic box of ``n_molecules`` rigid-geometry waters on a grid."""
+    # Built exactly at IntramolecularSpring's equilibrium bond length so the
+    # spring exerts no force and the Langevin sub-step is a no-op: whatever the
+    # geometry does during a test is then the barostat's doing alone.
+    angle = np.radians(104.52)
     geometry = np.array([[0.0, 0.0, 0.0],
-                         [0.9572, 0.0, 0.0],
-                         [-0.2400, 0.9266, 0.0]])
+                         [OH_BOND, 0.0, 0.0],
+                         [OH_BOND * np.cos(angle), OH_BOND * np.sin(angle), 0.0]])
     per_side = int(np.ceil(n_molecules ** (1 / 3)))
     spacing = cell / per_side
     positions = []

@@ -49,6 +49,8 @@ import re
 from ase.calculators.mixing import SumCalculator
 from ase.units import Bohr
 
+from .boxes import DEFAULT_N_SIDE
+
 MODEL = "uma-s-1p2"
 TASK = "omc"
 
@@ -118,35 +120,50 @@ def d4_damping(functional):
         return dict(fallback)
 
 
-def make_d4_atm(functional="pbe", disp3_cutoff=DISP3_CUTOFF):
+def make_d4_atm(functional="pbe", disp3_cutoff=DISP3_CUTOFF, quiet=False):
     """DFT-D4 calculator returning only the three-body (ATM) dispersion.
 
     `method` is deliberately not set: when a method name is given, the tabulated
     damping parameters are used and the s6/s8 tweaks below are ignored, which
     would silently give the full two-body energy. a1/a2 are still required
     because the ATM zero damping is built on the same critical radii.
+
+    `disp3_cutoff=None` leaves dftd4's own real-space cutoffs in place (disp3 =
+    40 Bohr = 21.2 A), which is what the ATM values quoted in this module's
+    docstring converge towards; passing a number truncates the triple sum there
+    instead. That is worth doing: on a 216-molecule box the sum at 12 A is ~20x
+    cheaper than the default and reproduces its pressure to within a bar, and
+    an on-the-fly three-body MD run is dominated by exactly this cost.
     """
     from dftd4.ase import DFTD4
 
     damping = d4_damping(functional)
     params = {"s6": 0.0, "s8": 0.0, "s9": 1.0, "alp": 16.0, **damping}
-    print(f"  D4 ATM-only: s6=0, s8=0, s9=1, "
-          f"a1={params['a1']:.4f}, a2={params['a2']:.4f} ({functional.upper()}), "
-          f"disp3 cutoff {disp3_cutoff:.1f} A")
+    if not quiet:
+        print(f"  D4 ATM-only: s6=0, s8=0, s9=1, "
+              f"a1={params['a1']:.4f}, a2={params['a2']:.4f} "
+              f"({functional.upper()}), disp3 cutoff "
+              f"{'library default' if disp3_cutoff is None else f'{disp3_cutoff:.1f} A'}")
 
     return DFTD4(
         params_tweaks=params,
-        #         realspace_cutoff={
-        #             "disp2": DISP2_CUTOFF,
-        #             "disp3": disp3_cutoff,
-        #             "cn": CN_CUTOFF,
-        #             
+        realspace_cutoff=realspace_cutoff(disp3_cutoff),
+    )
+
+
+def realspace_cutoff(disp3_cutoff=DISP3_CUTOFF):
+    """`realspace_cutoff` kwargs for DFTD4; empty dict keeps dftd4's defaults."""
+    if disp3_cutoff is None:
+        return {}
+    return {
+        "disp2": DISP2_CUTOFF,
+        "disp3": disp3_cutoff,
+        "cn": CN_CUTOFF,
         # Smooth the cutoffs: with the two-body term switched off there is
         # no large smooth background to hide a discontinuity in the forces.
-        #             "width2": 0.05 * Bohr,
-        #             "width3": 0.05 * Bohr,
-        #         },
-    )
+        "width2": 0.05 * Bohr,
+        "width3": 0.05 * Bohr,
+    }
 
 
 class SumWithFreeEnergy(SumCalculator):
@@ -223,14 +240,13 @@ def require_stress(atoms, task):
         ) from exc
 
 
-# Historical box size (n_side=6, 216 H2O) that the un-tagged filenames in
-# this directory already belong to. Any run at a different size gets an
-# explicit _nN tag so it cannot silently collide with (or overwrite) those.
-DEFAULT_N_SIDE = 6
 
 
 def suffix(three_body, task=TASK, model=MODEL, n_side=None):
     """Filename tag so different runs do not overwrite each other.
+
+    Sizes are tagged against `boxes.DEFAULT_N_SIDE` (n_side=6, 216 H2O), the
+    historical box the un-tagged filenames already belong to.
 
     Empty for the default model/task/size, so existing output names are
     unchanged. The model belongs in the tag: a density from uma-m is a

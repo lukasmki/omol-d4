@@ -6,7 +6,7 @@ HERE = Path(__file__).parent
 
 DATASETS = [
     ("npt_volume_uma-s-1p2p1_omol_n4.csv", "UMA-s-1.2.1"),
-    ("npt_volume_uma-s-1p2p1_omol_n4_atm.csv", "UMA-s-1.2.1-D4(3B)"),
+    ("npt_volume_uma-s-1p2p1_omol_n4_atm.csv", "UMA-s-1.2.1(3B-D4)"),
 ]
 
 
