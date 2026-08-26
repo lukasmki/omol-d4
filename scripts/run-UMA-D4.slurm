@@ -8,13 +8,14 @@
 #SBATCH --nodes=1
 #SBATCH --time=48:00:00
 
-cd $SCRATCH/uma/
+cd $SCRATCH/omol-d4/
 source venv/bin/activate
+cd scripts/
 
 # The stages are thin drivers over the omol-d4 package, so it has to be
 # importable in this venv: `uv pip install -e /path/to/omol-dispersion`.
 
-export OMP_NUM_THREADS=128
+export OMP_NUM_THREADS=64
 export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 

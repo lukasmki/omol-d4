@@ -8,8 +8,9 @@
 #SBATCH --nodes=1
 #SBATCH --time=00:30:00
 
-cd $SCRATCH/uma/
+cd $SCRATCH/omol-d4/
 source venv/bin/activate
+cd scripts/
 
 # The stages are thin drivers over the omol-d4 package, so it has to be
 # importable in this venv: `uv pip install -e /path/to/omol-dispersion`.
@@ -17,7 +18,7 @@ source venv/bin/activate
 # Must match the production jobs: dftd4 is OpenMP-parallel and the ATM triple
 # sum is the whole cost being measured here, so a profile taken at a different
 # thread count does not transfer to run-UMA-D4.slurm.
-export OMP_NUM_THREADS=128
+export OMP_NUM_THREADS=64
 export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 
