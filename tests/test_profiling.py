@@ -52,15 +52,13 @@ def test_thread_scan_measures_each_point_in_its_own_process():
 
     assert [row["threads"] for row in rows] == [1, 2]
     seen = [row["omp_max_threads"] for row in rows]
-    if seen[0] is not None:      # only assert when the runtime is probeable
+    if seen[0] is not None:  # only assert when the runtime is probeable
         assert seen == [1, 2], "OMP_NUM_THREADS did not reach the subprocess"
 
     # The first thread count is the baseline the speedups are relative to.
     assert rows[0]["speedup"] == pytest.approx(1.0)
     assert rows[0]["efficiency_pct"] == pytest.approx(100.0)
-    assert rows[1]["speedup"] == pytest.approx(
-        rows[0]["d4_ms"] / rows[1]["d4_ms"]
-    )
+    assert rows[1]["speedup"] == pytest.approx(rows[0]["d4_ms"] / rows[1]["d4_ms"])
 
 
 @pytest.mark.slow
@@ -73,8 +71,10 @@ def test_thread_count_does_not_change_the_answer():
 
 def test_write_rows_covers_every_key_any_row_has():
     """Size, cutoff and thread rows have different keys and share one writer."""
-    rows = [{"mode": "threads", "threads": 1, "d4_ms": 1.0},
-            {"mode": "cutoff", "d4_ms": 2.0, "p_atm_bar": 3.0}]
+    rows = [
+        {"mode": "threads", "threads": 1, "d4_ms": 1.0},
+        {"mode": "cutoff", "d4_ms": 2.0, "p_atm_bar": 3.0},
+    ]
     import pathlib
     import tempfile
 
@@ -84,7 +84,7 @@ def test_write_rows_covers_every_key_any_row_has():
         lines = path.read_text().splitlines()
 
     assert lines[0] == "d4_ms,mode,p_atm_bar,threads"
-    assert lines[1] == "1.0,threads,,1"     # missing keys stay empty
+    assert lines[1] == "1.0,threads,,1"  # missing keys stay empty
     assert lines[2] == "2.0,cutoff,3.0,"
 
 

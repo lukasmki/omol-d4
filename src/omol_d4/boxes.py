@@ -25,7 +25,7 @@ from .constants import INIT_DENSITY, M_H2O, N_ATOMS_PER_WATER, N_AVOGADRO
 SAFE_MIN_EDGE = 14.0
 HARD_MIN_EDGE = 8.0
 
-DEFAULT_N_SIDE = 6      # n^3 molecules: 6 -> 216 H2O (648 atoms), L ~ 18.6 A
+DEFAULT_N_SIDE = 6  # n^3 molecules: 6 -> 216 H2O (648 atoms), L ~ 18.6 A
 
 
 def box_length_for_density(n_molecules, density_g_cm3=INIT_DENSITY):
@@ -39,15 +39,22 @@ def random_rotation(rng):
     q = rng.normal(size=4)
     q /= np.linalg.norm(q)
     w, x, y, z = q
-    return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-    ])
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
 
 
-def build_water_box(n_side=DEFAULT_N_SIDE, density_g_cm3=INIT_DENSITY, rng=None,
-                    min_dist=1.75, n_tries=60):
+def build_water_box(
+    n_side=DEFAULT_N_SIDE,
+    density_g_cm3=INIT_DENSITY,
+    rng=None,
+    min_dist=1.75,
+    n_tries=60,
+):
     """Water molecules on a cubic grid, each given a random orientation.
 
     Purely random orientations at liquid density produce ~1 A H...H contacts,
@@ -81,7 +88,7 @@ def build_water_box(n_side=DEFAULT_N_SIDE, density_g_cm3=INIT_DENSITY, rng=None,
                 best, best_gap = pos, np.inf
                 break
             delta = pos[:, None, :] - placed[None, :, :]
-            delta -= np.round(delta / length) * length      # minimum image
+            delta -= np.round(delta / length) * length  # minimum image
             gap = np.sqrt((delta**2).sum(-1)).min()
             if gap > best_gap:
                 best, best_gap = pos, gap
@@ -127,8 +134,7 @@ def report_contacts(atoms):
         print(f"  min intermolecular {pair} : {distance:.2f} A")
 
 
-def check_box_size(atoms, safe_min_edge=SAFE_MIN_EDGE,
-                   hard_min_edge=HARD_MIN_EDGE):
+def check_box_size(atoms, safe_min_edge=SAFE_MIN_EDGE, hard_min_edge=HARD_MIN_EDGE):
     """Stop on a degenerate cell; warn on a small but deliberate one."""
     min_edge = atoms.cell.lengths().min()
     if min_edge <= hard_min_edge:
@@ -137,9 +143,11 @@ def check_box_size(atoms, safe_min_edge=SAFE_MIN_EDGE,
             f"liquid (need > {hard_min_edge:.1f} A)."
         )
     if min_edge <= safe_min_edge:
-        print(f"  WARNING: box edge {min_edge:.2f} A is below the "
-              f"~{safe_min_edge:.0f} A (2x cutoff) safety margin; the MLIP and "
-              "any three-body D4 term will see extra periodic images of "
-              "themselves. Treat results at this size as a deliberate "
-              "finite-size tradeoff, not directly comparable to a larger box.")
+        print(
+            f"  WARNING: box edge {min_edge:.2f} A is below the "
+            f"~{safe_min_edge:.0f} A (2x cutoff) safety margin; the MLIP and "
+            "any three-body D4 term will see extra periodic images of "
+            "themselves. Treat results at this size as a deliberate "
+            "finite-size tradeoff, not directly comparable to a larger box."
+        )
     return min_edge

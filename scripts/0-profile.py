@@ -41,23 +41,44 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--sizes", type=int, nargs="+", default=[3, 4, 5, 6],
-                        help="n_side values; n_side^3 water molecules each")
-    parser.add_argument("--n-calls", type=int, default=5,
-                        help="timed calls per configuration (after warmup)")
-    parser.add_argument("--cutoff-scan", action="store_true",
-                        help="scan the ATM cutoff at the largest size instead")
-    parser.add_argument("--cutoffs", type=float, nargs="+",
-                        default=[6.0, 8.0, 10.0, 12.0, 16.0],
-                        help="explicit ATM cutoffs to scan; the library "
-                             "default is always measured alongside them")
-    parser.add_argument("--disp3-cutoff", type=float, default=DISP3_CUTOFF,
-                        help="ATM real-space cutoff in Angstrom used by the "
-                             "size sweep")
-    parser.add_argument("--check-sum", action="store_true",
-                        help="also time the combined SumCalculator")
-    parser.add_argument("--model", default=MODEL,
-                        help=f"UMA checkpoint, e.g. {', '.join(KNOWN_MODELS)}")
+    parser.add_argument(
+        "--sizes",
+        type=int,
+        nargs="+",
+        default=[3, 4, 5, 6],
+        help="n_side values; n_side^3 water molecules each",
+    )
+    parser.add_argument(
+        "--n-calls",
+        type=int,
+        default=5,
+        help="timed calls per configuration (after warmup)",
+    )
+    parser.add_argument(
+        "--cutoff-scan",
+        action="store_true",
+        help="scan the ATM cutoff at the largest size instead",
+    )
+    parser.add_argument(
+        "--cutoffs",
+        type=float,
+        nargs="+",
+        default=[6.0, 8.0, 10.0, 12.0, 16.0],
+        help="explicit ATM cutoffs to scan; the library "
+        "default is always measured alongside them",
+    )
+    parser.add_argument(
+        "--disp3-cutoff",
+        type=float,
+        default=DISP3_CUTOFF,
+        help="ATM real-space cutoff in Angstrom used by the size sweep",
+    )
+    parser.add_argument(
+        "--check-sum", action="store_true", help="also time the combined SumCalculator"
+    )
+    parser.add_argument(
+        "--model", default=MODEL, help=f"UMA checkpoint, e.g. {', '.join(KNOWN_MODELS)}"
+    )
     parser.add_argument("--task", default=TASK)
     parser.add_argument("--functional", default=None)
     parser.add_argument("--device", default="cuda")
@@ -92,8 +113,10 @@ def main():
         )
 
     write_rows(rows, args.csv)
-    print("\nProjected wall time is per force+stress call, so an NPT run of "
-          f"60,000 steps at {TIMESTEP_FS} fs costs 60,000 x the 'sum' column.")
+    print(
+        "\nProjected wall time is per force+stress call, so an NPT run of "
+        f"60,000 steps at {TIMESTEP_FS} fs costs 60,000 x the 'sum' column."
+    )
 
 
 if __name__ == "__main__":

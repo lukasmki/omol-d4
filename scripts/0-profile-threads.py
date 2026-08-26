@@ -49,27 +49,50 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--threads", type=int, nargs="+",
-                        default=list(DEFAULT_THREAD_COUNTS),
-                        help="OMP_NUM_THREADS values to measure; the first is "
-                             "the baseline the speedups are relative to "
-                             f"(default {' '.join(map(str, DEFAULT_THREAD_COUNTS))})")
-    parser.add_argument("--n-side", type=int, default=4,
-                        help="n^3 water molecules in the profiled box "
-                             "(default 4, i.e. the 64 H2O production box)")
-    parser.add_argument("--n-calls", type=int, default=5,
-                        help="timed calls per thread count (after warmup)")
-    parser.add_argument("--warmup", type=int, default=2,
-                        help="untimed calls first, absorbing the dispersion "
-                             "model construction")
-    parser.add_argument("--disp3-cutoff", type=cutoff, default=DISP3_CUTOFF,
-                        help="ATM real-space cutoff in Angstrom, or 'default' "
-                             "for dftd4's own (40 Bohr = 21.2 A)")
-    parser.add_argument("--task", default=TASK,
-                        help="only selects the D4 damping parameter set; no "
-                             "MLIP is loaded by this script")
-    parser.add_argument("--functional", default=None,
-                        help="override the D4 damping parameter set")
+    parser.add_argument(
+        "--threads",
+        type=int,
+        nargs="+",
+        default=list(DEFAULT_THREAD_COUNTS),
+        help="OMP_NUM_THREADS values to measure; the first is "
+        "the baseline the speedups are relative to "
+        f"(default {' '.join(map(str, DEFAULT_THREAD_COUNTS))})",
+    )
+    parser.add_argument(
+        "--n-side",
+        type=int,
+        default=4,
+        help="n^3 water molecules in the profiled box "
+        "(default 4, i.e. the 64 H2O production box)",
+    )
+    parser.add_argument(
+        "--n-calls",
+        type=int,
+        default=5,
+        help="timed calls per thread count (after warmup)",
+    )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=2,
+        help="untimed calls first, absorbing the dispersion model construction",
+    )
+    parser.add_argument(
+        "--disp3-cutoff",
+        type=cutoff,
+        default=DISP3_CUTOFF,
+        help="ATM real-space cutoff in Angstrom, or 'default' "
+        "for dftd4's own (40 Bohr = 21.2 A)",
+    )
+    parser.add_argument(
+        "--task",
+        default=TASK,
+        help="only selects the D4 damping parameter set; no "
+        "MLIP is loaded by this script",
+    )
+    parser.add_argument(
+        "--functional", default=None, help="override the D4 damping parameter set"
+    )
     parser.add_argument("--csv", default="profile-threads.csv")
     return parser.parse_args()
 
@@ -86,9 +109,11 @@ def main():
         warmup=args.warmup,
     )
     write_rows(rows, args.csv)
-    print("\nSet OMP_NUM_THREADS in run-UMA-D4.slurm to the knee of this curve, "
-          "not to the core count: past it the extra threads mostly add "
-          "synchronisation.")
+    print(
+        "\nSet OMP_NUM_THREADS in run-UMA-D4.slurm to the knee of this curve, "
+        "not to the core count: past it the extra threads mostly add "
+        "synchronisation."
+    )
 
 
 if __name__ == "__main__":

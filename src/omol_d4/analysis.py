@@ -75,8 +75,10 @@ class DensityResult:
 
         Then the run is not equilibrated and the mean is not meaningful yet.
         """
-        return abs(self.first_half_density - self.second_half_density) > \
-            3 * self.density_stderr
+        return (
+            abs(self.first_half_density - self.second_half_density)
+            > 3 * self.density_stderr
+        )
 
     def report(self, note=""):
         """The same summary the original stage-2 script printed."""
@@ -99,8 +101,15 @@ class DensityResult:
         return "\n".join(lines)
 
 
-def analyse_volume(time_ps, volume, temperature, mass_amu, equil_ps=EQUIL_PS,
-                   n_blocks=N_BLOCKS, temperature_K=TEMPERATURE_K):
+def analyse_volume(
+    time_ps,
+    volume,
+    temperature,
+    mass_amu,
+    equil_ps=EQUIL_PS,
+    n_blocks=N_BLOCKS,
+    temperature_K=TEMPERATURE_K,
+):
     """Density and compressibility from a volume trace, with a block error bar."""
     prod = time_ps >= equil_ps
     if prod.sum() < n_blocks * 10:
@@ -113,8 +122,9 @@ def analyse_volume(time_ps, volume, temperature, mass_amu, equil_ps=EQUIL_PS,
     # Report rho = M / <V>: the volume is the fluctuating quantity, so its mean
     # is the well-defined ensemble average. <M/V> differs only at second order.
     rho = density(mass_amu, v.mean())
-    block_rho = np.array([density(mass_amu, b.mean())
-                          for b in np.array_split(v, n_blocks)])
+    block_rho = np.array(
+        [density(mass_amu, b.mean()) for b in np.array_split(v, n_blocks)]
+    )
     stderr = block_rho.std(ddof=1) / np.sqrt(n_blocks)
 
     half = len(v) // 2
@@ -144,14 +154,23 @@ def system_mass(columns):
     orders of magnitude below the density error bar, but it is an inference
     rather than a measurement, so the caller is told.
     """
-    mass = np.median(columns["density_g_cm3"] * columns["volume_A3"]
-                     / AMU_PER_A3_TO_G_PER_CM3)
+    mass = np.median(
+        columns["density_g_cm3"] * columns["volume_A3"] / AMU_PER_A3_TO_G_PER_CM3
+    )
     return float(mass)
 
 
-def analyse_run(three_body=False, task=TASK, model=MODEL, n_side=None,
-                outdir=".", equil_ps=EQUIL_PS, n_blocks=N_BLOCKS,
-                temperature_K=TEMPERATURE_K, mass_amu=None):
+def analyse_run(
+    three_body=False,
+    task=TASK,
+    model=MODEL,
+    n_side=None,
+    outdir=".",
+    equil_ps=EQUIL_PS,
+    n_blocks=N_BLOCKS,
+    temperature_K=TEMPERATURE_K,
+    mass_amu=None,
+):
     """Analyse one run's CSV, taking the system mass from its stage 1 input.
 
     Falls back to `system_mass` when that input is missing, so an archived CSV
@@ -165,11 +184,17 @@ def analyse_run(three_body=False, task=TASK, model=MODEL, n_side=None,
             mass_amu = read(str(source)).get_masses().sum()
         else:
             mass_amu = system_mass(columns)
-            print(f"  {source} not found; taking the system mass "
-                  f"({mass_amu:.2f} amu) from the volume trace itself")
+            print(
+                f"  {source} not found; taking the system mass "
+                f"({mass_amu:.2f} amu) from the volume trace itself"
+            )
     return analyse_volume(
-        columns["time_ps"], columns["volume_A3"], columns["temperature_K"],
-        mass_amu, equil_ps=equil_ps, n_blocks=n_blocks,
+        columns["time_ps"],
+        columns["volume_A3"],
+        columns["temperature_K"],
+        mass_amu,
+        equil_ps=equil_ps,
+        n_blocks=n_blocks,
         temperature_K=temperature_K,
     )
 
@@ -191,23 +216,34 @@ class ATMCorrection:
         return (self.corrected_density - self.density) / self.density * 100
 
     def report(self):
-        return "\n".join([
-            f"\n  E_ATM      = {self.energy_meV_per_molecule:+.3f} meV/molecule",
-            f"  P_ATM      = {self.pressure_bar:+.1f} "
-            f"+/- {self.pressure_stderr_bar:.1f} bar",
-            f"  kappa_T    = {self.kappa_T * 1e6:.1f} x 10^-6 /bar",
-            f"  density    = {self.density:.4f} g/cm^3 (UMA only)",
-            f"  corrected  = {self.corrected_density:.4f} g/cm^3 "
-            f"({self.percent_change:+.2f} %, three-body estimate)",
-            f"  experiment = {EXPERIMENTAL_DENSITY:.4f} g/cm^3",
-        ])
+        return "\n".join(
+            [
+                f"\n  E_ATM      = {self.energy_meV_per_molecule:+.3f} meV/molecule",
+                f"  P_ATM      = {self.pressure_bar:+.1f} "
+                f"+/- {self.pressure_stderr_bar:.1f} bar",
+                f"  kappa_T    = {self.kappa_T * 1e6:.1f} x 10^-6 /bar",
+                f"  density    = {self.density:.4f} g/cm^3 (UMA only)",
+                f"  corrected  = {self.corrected_density:.4f} g/cm^3 "
+                f"({self.percent_change:+.2f} %, three-body estimate)",
+                f"  experiment = {EXPERIMENTAL_DENSITY:.4f} g/cm^3",
+            ]
+        )
 
 
-def atm_correction(task=TASK, model=MODEL, n_side=None, outdir=".",
-                   functional=None, disp3_cutoff=DISP3_CUTOFF, n_frames=25,
-                   equil_ps=EQUIL_PS, sample_interval=SAMPLE_INTERVAL,
-                   timestep=TIMESTEP, temperature_K=TEMPERATURE_K,
-                   n_blocks=N_BLOCKS):
+def atm_correction(
+    task=TASK,
+    model=MODEL,
+    n_side=None,
+    outdir=".",
+    functional=None,
+    disp3_cutoff=DISP3_CUTOFF,
+    n_frames=25,
+    equil_ps=EQUIL_PS,
+    sample_interval=SAMPLE_INTERVAL,
+    timestep=TIMESTEP,
+    temperature_K=TEMPERATURE_K,
+    n_blocks=N_BLOCKS,
+):
     """Estimate the ATM effect on the density without rerunning the MD.
 
     Three-body forces are ~3 orders of magnitude smaller than the MLIP forces,
@@ -223,8 +259,16 @@ def atm_correction(task=TASK, model=MODEL, n_side=None, outdir=".",
     explicit three-body run before relying on it.
     """
     # The plain (non-three-body) run at the same model/task/size is the input.
-    result = analyse_run(False, task, model, n_side, outdir, equil_ps=equil_ps,
-                         n_blocks=n_blocks, temperature_K=temperature_K)
+    result = analyse_run(
+        False,
+        task,
+        model,
+        n_side,
+        outdir,
+        equil_ps=equil_ps,
+        n_blocks=n_blocks,
+        temperature_K=temperature_K,
+    )
     print(result.report())
 
     paths = stage_paths(False, task, model, n_side, outdir)
@@ -233,11 +277,9 @@ def atm_correction(task=TASK, model=MODEL, n_side=None, outdir=".",
     if n_equil >= len(frames) - 1:
         raise SystemExit("Trajectory is shorter than the equilibration window.")
     indices = np.linspace(n_equil, len(frames) - 1, n_frames, dtype=int)
-    print(f"\nEvaluating D4 three-body on {len(indices)} frames "
-          f"(of {len(frames)})...")
+    print(f"\nEvaluating D4 three-body on {len(indices)} frames (of {len(frames)})...")
 
-    d4 = make_d4_atm(functional or functional_for(task),
-                     disp3_cutoff=disp3_cutoff)
+    d4 = make_d4_atm(functional or functional_for(task), disp3_cutoff=disp3_cutoff)
     pressures, energies = [], []
     for count, i in enumerate(indices, 1):
         atoms = frames[int(i)]

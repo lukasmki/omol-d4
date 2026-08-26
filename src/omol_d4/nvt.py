@@ -23,7 +23,13 @@ except ImportError:  # pragma: no cover
 
 import numpy as np
 
-from .boxes import DEFAULT_N_SIDE, build_water_box, check_box_size, n_molecules, report_contacts
+from .boxes import (
+    DEFAULT_N_SIDE,
+    build_water_box,
+    check_box_size,
+    n_molecules,
+    report_contacts,
+)
 from .calculators import DISP3_CUTOFF, MODEL, TASK, build_calculator
 from .constants import (
     FRICTION,
@@ -44,14 +50,19 @@ from .paths import stage_paths
 def thermalize(atoms, temperature_K=TEMPERATURE_K, rng=None):
     """Draw Maxwell-Boltzmann momenta, then remove net translation/rotation."""
     thermalize_momenta(atoms, temperature_K=temperature_K, rng=rng)
-    Stationary(atoms)     # zero net linear momentum
-    ZeroRotation(atoms)   # harmless under PBC, keeps the start clean
+    Stationary(atoms)  # zero net linear momentum
+    ZeroRotation(atoms)  # harmless under PBC, keeps the start clean
     return atoms
 
 
-def soft_start(atoms, steps=SOFT_START_STEPS, temperature_K=TEMPERATURE_K,
-               timestep=SOFT_START_TIMESTEP, friction=SOFT_START_FRICTION,
-               rng=None):
+def soft_start(
+    atoms,
+    steps=SOFT_START_STEPS,
+    temperature_K=TEMPERATURE_K,
+    timestep=SOFT_START_TIMESTEP,
+    friction=SOFT_START_FRICTION,
+    rng=None,
+):
     """Short, heavily damped Langevin run that bleeds off the initial strain.
 
     The grid configuration is orientationally unrelaxed, so the first 0.25 ps
@@ -60,28 +71,46 @@ def soft_start(atoms, steps=SOFT_START_STEPS, temperature_K=TEMPERATURE_K,
     """
     if steps <= 0:
         return atoms
-    Langevin(atoms, timestep=timestep, temperature_K=temperature_K,
-             friction=friction, rng=rng).run(steps=steps)
-    print("Soft start done; E_pot = "
-          f"{atoms.get_potential_energy() / n_molecules(atoms):.4f} eV/molecule")
+    Langevin(
+        atoms,
+        timestep=timestep,
+        temperature_K=temperature_K,
+        friction=friction,
+        rng=rng,
+    ).run(steps=steps)
+    print(
+        "Soft start done; E_pot = "
+        f"{atoms.get_potential_energy() / n_molecules(atoms):.4f} eV/molecule"
+    )
     return atoms
 
 
-def equilibrate(atoms, steps=NVT_STEPS, temperature_K=TEMPERATURE_K,
-                timestep=TIMESTEP, friction=FRICTION,
-                log_interval=LOG_INTERVAL, rng=None,
-                traj_path=None, log_path=None):
+def equilibrate(
+    atoms,
+    steps=NVT_STEPS,
+    temperature_K=TEMPERATURE_K,
+    timestep=TIMESTEP,
+    friction=FRICTION,
+    log_interval=LOG_INTERVAL,
+    rng=None,
+    traj_path=None,
+    log_path=None,
+):
     """Run `steps` of NVT Langevin dynamics, writing a trajectory and a log."""
-    dyn = Langevin(atoms, timestep=timestep, temperature_K=temperature_K,
-                   friction=friction, rng=rng)
+    dyn = Langevin(
+        atoms,
+        timestep=timestep,
+        temperature_K=temperature_K,
+        friction=friction,
+        rng=rng,
+    )
 
     traj = Trajectory(str(traj_path), "w", atoms) if traj_path else None
     if traj is not None:
         dyn.attach(traj.write, interval=log_interval)
     if log_path is not None:
         dyn.attach(
-            MDLogger(dyn, atoms, str(log_path), header=True, stress=False,
-                     mode="w"),
+            MDLogger(dyn, atoms, str(log_path), header=True, stress=False, mode="w"),
             interval=log_interval,
         )
 
@@ -94,12 +123,25 @@ def equilibrate(atoms, steps=NVT_STEPS, temperature_K=TEMPERATURE_K,
     return dyn
 
 
-def run_nvt(n_side=DEFAULT_N_SIDE, steps=NVT_STEPS, three_body=False,
-            model=MODEL, task=TASK, functional=None,
-            disp3_cutoff=DISP3_CUTOFF, device="cuda", seed=SEED,
-            temperature_K=TEMPERATURE_K, timestep=TIMESTEP, friction=FRICTION,
-            log_interval=LOG_INTERVAL, density_g_cm3=INIT_DENSITY,
-            soft_start_steps=SOFT_START_STEPS, outdir=".", calc=None):
+def run_nvt(
+    n_side=DEFAULT_N_SIDE,
+    steps=NVT_STEPS,
+    three_body=False,
+    model=MODEL,
+    task=TASK,
+    functional=None,
+    disp3_cutoff=DISP3_CUTOFF,
+    device="cuda",
+    seed=SEED,
+    temperature_K=TEMPERATURE_K,
+    timestep=TIMESTEP,
+    friction=FRICTION,
+    log_interval=LOG_INTERVAL,
+    density_g_cm3=INIT_DENSITY,
+    soft_start_steps=SOFT_START_STEPS,
+    outdir=".",
+    calc=None,
+):
     """Build a water box, equilibrate it at fixed volume, and write it out.
 
     Returns the equilibrated `Atoms`. The final frame is written as a .traj so
@@ -111,24 +153,41 @@ def run_nvt(n_side=DEFAULT_N_SIDE, steps=NVT_STEPS, three_body=False,
 
     atoms = build_water_box(n_side=n_side, density_g_cm3=density_g_cm3, rng=rng)
     atoms.info.update({"charge": 0, "spin": 1})  # ignored by non-omol tasks
-    print(f"Built {n_molecules(atoms)} H2O ({len(atoms)} atoms) in a "
-          f"{atoms.cell.lengths()[0]:.2f} A cube at {density_g_cm3} g/cm^3")
+    print(
+        f"Built {n_molecules(atoms)} H2O ({len(atoms)} atoms) in a "
+        f"{atoms.cell.lengths()[0]:.2f} A cube at {density_g_cm3} g/cm^3"
+    )
     report_contacts(atoms)
     check_box_size(atoms)
 
-    atoms.calc = calc if calc is not None else build_calculator(
-        device=device, seed=seed, three_body=three_body, model=model,
-        task=task, functional=functional, disp3_cutoff=disp3_cutoff,
-        atoms=atoms,
+    atoms.calc = (
+        calc
+        if calc is not None
+        else build_calculator(
+            device=device,
+            seed=seed,
+            three_body=three_body,
+            model=model,
+            task=task,
+            functional=functional,
+            disp3_cutoff=disp3_cutoff,
+            atoms=atoms,
+        )
     )
 
     thermalize(atoms, temperature_K=temperature_K, rng=rng)
-    soft_start(atoms, steps=soft_start_steps, temperature_K=temperature_K,
-               rng=rng)
-    equilibrate(atoms, steps=steps, temperature_K=temperature_K,
-                timestep=timestep, friction=friction,
-                log_interval=log_interval, rng=rng,
-                traj_path=paths.nvt_traj, log_path=paths.nvt_log)
+    soft_start(atoms, steps=soft_start_steps, temperature_K=temperature_K, rng=rng)
+    equilibrate(
+        atoms,
+        steps=steps,
+        temperature_K=temperature_K,
+        timestep=timestep,
+        friction=friction,
+        log_interval=log_interval,
+        rng=rng,
+        traj_path=paths.nvt_traj,
+        log_path=paths.nvt_log,
+    )
 
     write(str(paths.equilibrated), atoms)
     print(f"Wrote {paths.equilibrated}")

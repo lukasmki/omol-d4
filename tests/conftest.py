@@ -25,8 +25,9 @@ class ZeroCalculator(Calculator):
     implemented_properties = ["energy", "free_energy", "forces"]
 
     def calculate(self, atoms=None, properties=None, system_changes=all_changes):
-        super().calculate(atoms, properties or self.implemented_properties,
-                          system_changes)
+        super().calculate(
+            atoms, properties or self.implemented_properties, system_changes
+        )
         self.results = {
             "energy": 0.0,
             "free_energy": 0.0,
@@ -51,8 +52,9 @@ class IntramolecularSpring(Calculator):
         self.r0 = r0
 
     def calculate(self, atoms=None, properties=None, system_changes=all_changes):
-        super().calculate(atoms, properties or self.implemented_properties,
-                          system_changes)
+        super().calculate(
+            atoms, properties or self.implemented_properties, system_changes
+        )
         pos = atoms.get_positions()
         forces = np.zeros_like(pos)
         energy = 0.0
@@ -91,7 +93,9 @@ class ScriptedRNG:
             return self.accept_draws.pop(0)
         self.n_proposals_used += 1
         value = self.proposals.pop(0)
-        assert low <= value <= high, f"scripted proposal {value} outside [{low}, {high}]"
+        assert low <= value <= high, (
+            f"scripted proposal {value} outside [{low}, {high}]"
+        )
         return value
 
     def random(self, size=None):
@@ -104,9 +108,13 @@ def water_box(n_molecules=8, cell=12.0, calculator=None):
     # spring exerts no force and the Langevin sub-step is a no-op: whatever the
     # geometry does during a test is then the barostat's doing alone.
     angle = np.radians(104.52)
-    geometry = np.array([[0.0, 0.0, 0.0],
-                         [OH_BOND, 0.0, 0.0],
-                         [OH_BOND * np.cos(angle), OH_BOND * np.sin(angle), 0.0]])
+    geometry = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [OH_BOND, 0.0, 0.0],
+            [OH_BOND * np.cos(angle), OH_BOND * np.sin(angle), 0.0],
+        ]
+    )
     per_side = int(np.ceil(n_molecules ** (1 / 3)))
     spacing = cell / per_side
     positions = []
@@ -119,8 +127,9 @@ def water_box(n_molecules=8, cell=12.0, calculator=None):
                 origin = np.array([i, j, k]) * spacing + 0.5 * spacing
                 positions.extend(geometry + origin)
                 placed += 1
-    atoms = Atoms("OHH" * n_molecules, positions=np.array(positions),
-                  cell=[cell] * 3, pbc=True)
+    atoms = Atoms(
+        "OHH" * n_molecules, positions=np.array(positions), cell=[cell] * 3, pbc=True
+    )
     atoms.calc = calculator if calculator is not None else ZeroCalculator()
     return atoms
 

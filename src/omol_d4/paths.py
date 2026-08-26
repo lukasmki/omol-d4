@@ -45,14 +45,16 @@ class StagePaths:
         return self.outdir / f"npt_volume{self.tag}.csv"
 
 
-def stage_paths(three_body=False, task=TASK, model=MODEL, n_side=None,
-                outdir=".") -> StagePaths:
+def stage_paths(
+    three_body=False, task=TASK, model=MODEL, n_side=None, outdir="."
+) -> StagePaths:
     """Paths for one run, identified the same way `suffix()` identifies it."""
     return StagePaths(suffix(three_body, task, model, n_side), Path(outdir))
 
 
-def equilibrated_input(three_body=False, task=TASK, model=MODEL, n_side=None,
-                       outdir=".") -> Path:
+def equilibrated_input(
+    three_body=False, task=TASK, model=MODEL, n_side=None, outdir="."
+) -> Path:
     """Stage 1 output to start stage 2 from, falling back to the non-ATM one.
 
     Running stage 1 without ATM and stage 2 with it is a legitimate (and much

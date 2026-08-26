@@ -81,8 +81,8 @@ FALLBACK_DAMPING = {
 # three-body pressure (PBE damping) is 235 bar at 6 A, 374 at 8 A, 404 at 12 A
 # and 410 at 16 A, while the cost scales steeply, so 12 A is a compromise.
 DISP3_CUTOFF = 12.0
-DISP2_CUTOFF = 10.0   # irrelevant here: s6 = s8 = 0 means no two-body sum
-CN_CUTOFF = 15.0      # still matters: C9 derives from CN-dependent C6
+DISP2_CUTOFF = 10.0  # irrelevant here: s6 = s8 = 0 means no two-body sum
+CN_CUTOFF = 15.0  # still matters: C9 derives from CN-dependent C6
 
 
 def functional_for(task):
@@ -101,7 +101,7 @@ def d4_damping(functional):
     try:
         try:
             import tomllib
-        except ModuleNotFoundError:      # Python < 3.11
+        except ModuleNotFoundError:  # Python < 3.11
             import tomli as tomllib
 
         import dftd4
@@ -140,10 +140,12 @@ def make_d4_atm(functional="pbe", disp3_cutoff=DISP3_CUTOFF, quiet=False):
     damping = d4_damping(functional)
     params = {"s6": 0.0, "s8": 0.0, "s9": 1.0, "alp": 16.0, **damping}
     if not quiet:
-        print(f"  D4 ATM-only: s6=0, s8=0, s9=1, "
-              f"a1={params['a1']:.4f}, a2={params['a2']:.4f} "
-              f"({functional.upper()}), disp3 cutoff "
-              f"{'library default' if disp3_cutoff is None else f'{disp3_cutoff:.1f} A'}")
+        print(
+            f"  D4 ATM-only: s6=0, s8=0, s9=1, "
+            f"a1={params['a1']:.4f}, a2={params['a2']:.4f} "
+            f"({functional.upper()}), disp3 cutoff "
+            f"{'library default' if disp3_cutoff is None else f'{disp3_cutoff:.1f} A'}"
+        )
 
     return DFTD4(
         params_tweaks=params,
@@ -191,22 +193,30 @@ class SumWithFreeEnergy(SumCalculator):
         self.results["free_energy"] = self.results["energy"]
 
 
-def build_calculator(device="cuda", seed=0, three_body=False, model=MODEL,
-                     task=TASK, functional=None, disp3_cutoff=DISP3_CUTOFF,
-                     atoms=None):
+def build_calculator(
+    device="cuda",
+    seed=0,
+    three_body=False,
+    model=MODEL,
+    task=TASK,
+    functional=None,
+    disp3_cutoff=DISP3_CUTOFF,
+    atoms=None,
+):
     """UMA `model` on `task`, optionally summed with the ATM-only D4 term."""
     from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
     functional = functional or functional_for(task)
 
     if atoms is not None and atoms.pbc.any() and task not in PERIODIC_TASKS:
-        print(f"  WARNING: task '{task}' was trained on non-periodic data "
-              f"({functional.upper()}); running it on a periodic cell is an "
-              "extrapolation, and it will not provide a stress.")
+        print(
+            f"  WARNING: task '{task}' was trained on non-periodic data "
+            f"({functional.upper()}); running it on a periodic cell is an "
+            "extrapolation, and it will not provide a stress."
+        )
 
     try:
-        predictor = pretrained_mlip.get_predict_unit(model, device=device,
-                                                     seed=seed)
+        predictor = pretrained_mlip.get_predict_unit(model, device=device, seed=seed)
     except Exception as exc:  # noqa: BLE001 - remap to something actionable
         available = getattr(pretrained_mlip, "available_models", KNOWN_MODELS)
         raise SystemExit(
@@ -238,8 +248,6 @@ def require_stress(atoms, task):
             "You can still run stage 1 (NVT) with omol if you want to compare "
             "structure at fixed volume."
         ) from exc
-
-
 
 
 def suffix(three_body, task=TASK, model=MODEL, n_side=None):

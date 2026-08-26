@@ -41,19 +41,31 @@ def parse_args():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--three-body", action="store_true",
+        "--three-body",
+        action="store_true",
         help="add the D4 Axilrod-Teller-Muto three-body dispersion term",
     )
-    parser.add_argument("--model", default=MODEL,
-                        help=f"UMA checkpoint, e.g. {', '.join(KNOWN_MODELS)}")
-    parser.add_argument("--task", default=TASK,
-                        help="UMA task: omc (periodic) or omol (molecular)")
-    parser.add_argument("--functional", default=None,
-                        help="override the D4 damping parameter set")
-    parser.add_argument("--n-side", type=int, default=DEFAULT_N_SIDE,
-                        help=f"n^3 water molecules per box (default {DEFAULT_N_SIDE})")
-    parser.add_argument("--n-steps", type=int, default=NVT_STEPS,
-                        help=f"NVT steps after the soft start (default {NVT_STEPS})")
+    parser.add_argument(
+        "--model", default=MODEL, help=f"UMA checkpoint, e.g. {', '.join(KNOWN_MODELS)}"
+    )
+    parser.add_argument(
+        "--task", default=TASK, help="UMA task: omc (periodic) or omol (molecular)"
+    )
+    parser.add_argument(
+        "--functional", default=None, help="override the D4 damping parameter set"
+    )
+    parser.add_argument(
+        "--n-side",
+        type=int,
+        default=DEFAULT_N_SIDE,
+        help=f"n^3 water molecules per box (default {DEFAULT_N_SIDE})",
+    )
+    parser.add_argument(
+        "--n-steps",
+        type=int,
+        default=NVT_STEPS,
+        help=f"NVT steps after the soft start (default {NVT_STEPS})",
+    )
     parser.add_argument("--outdir", default=".", help="where to write the outputs")
     parser.add_argument("--device", default="cuda")
     return parser.parse_args()

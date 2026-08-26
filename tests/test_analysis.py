@@ -23,16 +23,16 @@ from omol_d4.npt import VolumeRecorder, resolve_barostat
 from omol_d4.paths import equilibrated_input, stage_paths
 
 TEMPERATURE_K = 298.0
-MASS = 64 * 18.01528     # 64 H2O, the box the shipped data was measured on
+MASS = 64 * 18.01528  # 64 H2O, the box the shipped data was measured on
 
 
 def constant_trace(n=500, volume=1800.0, t_end=30.0):
     """A trace with no volume fluctuation at all."""
-    return (np.linspace(0.0, t_end, n), np.full(n, volume),
-            np.full(n, TEMPERATURE_K))
+    return (np.linspace(0.0, t_end, n), np.full(n, volume), np.full(n, TEMPERATURE_K))
 
 
 # --- the estimators --------------------------------------------------------
+
 
 def test_density_matches_the_hand_calculation():
     assert density(MASS, 1800.0) == pytest.approx(
@@ -63,9 +63,10 @@ def test_density_is_reported_as_mass_over_mean_volume():
 
 # --- the production window and the block error bar -------------------------
 
+
 def test_equilibration_window_is_discarded():
     time, volume, temperature = constant_trace(n=600, t_end=30.0)
-    volume[time < 10.0] = 9999.0          # junk that must not reach the average
+    volume[time < 10.0] = 9999.0  # junk that must not reach the average
     result = analyse_volume(time, volume, temperature, MASS, equil_ps=10.0)
     assert result.volume_mean == pytest.approx(1800.0)
     assert result.time_range_ps[0] >= 10.0
@@ -96,6 +97,7 @@ def test_a_steadily_drifting_trace_is_flagged():
 
 # --- reading a run back off disk ------------------------------------------
 
+
 def test_system_mass_is_recovered_from_a_volume_trace():
     """A CSV carries mass implicitly, so an archived run can stand alone."""
     volume = np.array([1800.0, 1750.0, 1900.0])
@@ -113,14 +115,14 @@ def test_analyse_run_reads_a_csv_written_by_the_recorder(tmp_path):
             fh.write(f"{t:.4f},{v:.4f},{temp:.2f},{density(MASS, v):.5f}\n")
 
     columns = load_volume_csv(paths.npt_csv)
-    assert set(columns) == {"time_ps", "volume_A3", "temperature_K",
-                            "density_g_cm3"}
+    assert set(columns) == {"time_ps", "volume_A3", "temperature_K", "density_g_cm3"}
 
     result = analyse_run(False, "omol", "uma-s-1p2p1", 4, tmp_path, equil_ps=0.0)
     assert result.density == pytest.approx(density(MASS, 1800.0), rel=1e-4)
 
 
 # --- run naming ------------------------------------------------------------
+
 
 def test_default_run_is_untagged():
     """The historical filenames must keep working."""

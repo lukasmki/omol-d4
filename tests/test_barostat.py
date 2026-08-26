@@ -10,7 +10,7 @@ from ase import units
 
 from omol_d4.integrator import NPTLangevinMonteCarloBarostat
 
-from conftest import N_ATOMS_PER_WATER, ScriptedRNG, IntramolecularSpring, water_box
+from conftest import N_ATOMS_PER_WATER, ScriptedRNG, water_box
 
 TEMPERATURE_K = 300.0
 KT = units.kB * TEMPERATURE_K
@@ -32,14 +32,17 @@ def make_dyn(atoms, rng, volume_scale, pressure_au=0.0, bsinterval=1):
 
 def oh_distances(atoms):
     pos = atoms.get_positions()
-    return np.array([
-        np.linalg.norm(pos[h] - pos[o])
-        for o in range(0, len(atoms), N_ATOMS_PER_WATER)
-        for h in (o + 1, o + 2)
-    ])
+    return np.array(
+        [
+            np.linalg.norm(pos[h] - pos[o])
+            for o in range(0, len(atoms), N_ATOMS_PER_WATER)
+            for h in (o + 1, o + 2)
+        ]
+    )
 
 
 # --- the Metropolis criterion itself ---------------------------------------
+
 
 def test_downhill_move_is_accepted_without_a_metropolis_draw(waters):
     """dE + P dV - N kT ln(V'/V) < 0 must be accepted unconditionally."""
@@ -85,6 +88,7 @@ def test_rejected_move_restores_coordinates_exactly(waters):
 
 
 # --- the acceptance weight counts atoms ------------------------------------
+
 
 def test_acceptance_weight_counts_atoms(waters):
     """Atoms are scaled individually, so w uses N_atoms (getNumParticles()).
@@ -158,6 +162,7 @@ def test_ideal_gas_mean_volume_matches_analytic_result():
 
 # --- coordinate scaling ----------------------------------------------------
 
+
 def test_volume_move_scales_every_atom(waters):
     """A move must map x -> length_scale * x, as set_cell(scale_atoms=True) does."""
     positions0 = waters.get_positions()
@@ -189,6 +194,7 @@ def test_volume_move_strains_intramolecular_geometry(waters):
 
 
 # --- adaptive volume_scale bookkeeping -------------------------------------
+
 
 def test_default_volume_scale_is_one_percent_of_the_volume(waters):
     """OpenMM initialises volumeScale to 0.01 * volume."""
@@ -246,6 +252,7 @@ def test_in_band_window_keeps_accumulating(waters):
 
 # --- move frequency --------------------------------------------------------
 
+
 def test_barostat_fires_every_bsinterval_steps(waters):
     """OpenMM attempts a move on every `frequency`-th call, starting at the first."""
     rng = ScriptedRNG(proposals=[1.0] * 4, accept_draws=[])
@@ -270,4 +277,3 @@ def test_zero_bsinterval_disables_the_barostat(waters):
 
     assert dyn.total_attempted == 0
     assert waters.get_volume() == pytest.approx(v0)
-
