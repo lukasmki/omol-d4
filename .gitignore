@@ -11,6 +11,6 @@ wheels/
 
 # Generated data
 scripts/*.traj
-scripts/*.log
-scripts/*.png
-scripts/*.csv
+# scripts/*.log
+# scripts/*.png
+# scripts/*.csv
