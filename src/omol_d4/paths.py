@@ -4,13 +4,18 @@ Stage 1 writes files that stage 2 reads and stage 2 writes files that the
 analysis reads, so the naming convention is a genuine interface between them
 rather than a detail of either. `suffix()` (in `omol_d4.calculators`) builds the
 tag that keeps different model/task/size/three-body runs from overwriting each
-other; this module turns that tag into paths.
+other; this module turns that tag into paths, and (`npt_csvs`) turns a
+directory of finished runs back into tags.
 """
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from .calculators import MODEL, TASK, suffix
+from .calculators import MODEL, TASK, parse_tag, suffix
+
+# The stage 2 CSV's fixed prefix, shared by the path builder below and by
+# `npt_csvs`, which globs for it and reads the tag back out of what follows.
+NPT_CSV_STEM = "npt_volume"
 
 
 @dataclass(frozen=True)
@@ -42,7 +47,7 @@ class StagePaths:
 
     @property
     def npt_csv(self) -> Path:
-        return self.outdir / f"npt_volume{self.tag}.csv"
+        return self.outdir / f"{NPT_CSV_STEM}{self.tag}.csv"
 
 
 def stage_paths(
@@ -70,3 +75,20 @@ def equilibrated_input(
             print(f"  {path} not found, starting from {fallback}")
             return fallback
     return path
+
+
+def npt_csvs(outdir="."):
+    """Every stage 2 volume trace in `outdir`, as `(RunTag, Path)` pairs.
+
+    The tag is the only record a finished run leaves of what it was, so a
+    directory of CSVs is a set of runs and this reads it as one. Sorted by
+    `RunTag.sort_key`, which groups a run with the ones it is comparable to and
+    puts the plain arm before its three-body partner - the order the two arms
+    should be drawn in.
+    """
+    outdir = Path(outdir)
+    runs = [
+        (parse_tag(path.stem.removeprefix(NPT_CSV_STEM)), path)
+        for path in outdir.glob(f"{NPT_CSV_STEM}*.csv")
+    ]
+    return sorted(runs, key=lambda run: run[0].sort_key())

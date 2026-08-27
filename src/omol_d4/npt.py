@@ -65,7 +65,7 @@ def make_barostat(
     timestep=TIMESTEP,
     friction=FRICTION,
     mc_interval=25,
-    mc_volume_scale=1.0,
+    mc_volume_scale=None,
 ):
     """Construct the requested barostat, already attached to `atoms`."""
     if barostat == "mtk":
@@ -195,7 +195,7 @@ def run_npt(
     friction=FRICTION,
     sample_interval=SAMPLE_INTERVAL,
     mc_interval=25,
-    mc_volume_scale=1.0,
+    mc_volume_scale=None,
     outdir=".",
     atoms=None,
     calc=None,

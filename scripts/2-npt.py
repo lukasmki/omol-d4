@@ -99,8 +99,9 @@ def parse_args():
     parser.add_argument(
         "--mc-volume-scale",
         type=float,
-        default=1.0,
-        help="initial MC volume move size in A^3 (--barostat mc)",
+        default=None,
+        help="initial MC volume move size in A^3 (--barostat mc); "
+        "default is 1%% of the initial cell volume",
     )
     parser.add_argument(
         "--n-side",

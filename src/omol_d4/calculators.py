@@ -45,6 +45,7 @@ it on only one, use it on stage 2.
 
 import os
 import re
+from dataclasses import dataclass
 
 from ase.calculators.mixing import SumCalculator
 from ase.units import Bohr
@@ -267,3 +268,52 @@ def suffix(three_body, task=TASK, model=MODEL, n_side=None):
     task_tag = "" if task == TASK else f"_{task}"
     size_tag = "" if n_side in (None, DEFAULT_N_SIDE) else f"_n{n_side}"
     return model_tag + task_tag + size_tag + ("_atm" if three_body else "")
+
+
+@dataclass(frozen=True)
+class RunTag:
+    """What a filename tag says about the run that produced the file.
+
+    The inverse of `suffix()`, so a directory of outputs can be read back as a
+    set of runs. `model` is the tag's spelling of the checkpoint rather than the
+    checkpoint itself: `suffix()` flattens every non-alphanumeric character to a
+    dash, which is not reversible in general (though it is the identity for
+    every name in `KNOWN_MODELS`).
+    """
+
+    model: str = MODEL
+    task: str = TASK
+    n_side: int = DEFAULT_N_SIDE
+    three_body: bool = False
+
+    @property
+    def n_molecules(self):
+        return self.n_side**3
+
+    def sort_key(self):
+        """Groups a run with the ones it is comparable to, plain arm first."""
+        return (self.model, self.task, self.n_side, self.three_body)
+
+
+def parse_tag(tag):
+    """Read a `suffix()` tag back into the run it identifies.
+
+    Parsed by component rather than by position: the three-body marker and the
+    size are recognised by shape, a known task by name, and whatever is left is
+    the model. Anything the tag omits was a default when it was written, so it
+    is a default here.
+    """
+    parts = [part for part in tag.split("_") if part]
+    three_body = bool(parts) and parts[-1] == "atm"
+    if three_body:
+        parts.pop()
+
+    model, task, n_side = MODEL, TASK, DEFAULT_N_SIDE
+    for part in parts:
+        if re.fullmatch(r"n\d+", part):
+            n_side = int(part[1:])
+        elif part in TASK_FUNCTIONAL:
+            task = part
+        else:
+            model = part
+    return RunTag(model=model, task=task, n_side=n_side, three_body=three_body)

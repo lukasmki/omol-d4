@@ -8,6 +8,8 @@ script under `scripts/`:
     omol_d4.nvt         stage 1: build a water box and equilibrate it at
                         fixed volume.
     omol_d4.npt         stage 2: let the volume float, and stream the trace.
+    omol_d4.plotting    stage 3: the trace as density, volume and temperature
+                        against time, one line per run found on disk.
     omol_d4.analysis    the density, its error bar, the compressibility, and
                         the perturbative three-body correction.
 
@@ -35,17 +37,20 @@ from .boxes import (
 )
 from .calculators import (
     PERIODIC_TASKS,
+    RunTag,
     SumWithFreeEnergy,
     build_calculator,
     functional_for,
     make_d4_atm,
+    parse_tag,
     require_stress,
     suffix,
 )
 from .integrator import NPTLangevinMonteCarloBarostat
 from .npt import make_barostat, resolve_barostat, run_npt
 from .nvt import equilibrate, run_nvt
-from .paths import equilibrated_input, stage_paths
+from .paths import equilibrated_input, npt_csvs, stage_paths
+from .plotting import label_for, plot_quantity, plot_runs
 from .profiling import cutoff_scan, size_sweep, time_calculator, write_rows
 
 __all__ = [
@@ -53,6 +58,7 @@ __all__ = [
     "DensityResult",
     "NPTLangevinMonteCarloBarostat",
     "PERIODIC_TASKS",
+    "RunTag",
     "SumWithFreeEnergy",
     "analyse_run",
     "analyse_volume",
@@ -67,9 +73,14 @@ __all__ = [
     "equilibrate",
     "equilibrated_input",
     "functional_for",
+    "label_for",
     "make_barostat",
     "make_d4_atm",
     "n_molecules",
+    "npt_csvs",
+    "parse_tag",
+    "plot_quantity",
+    "plot_runs",
     "report_contacts",
     "require_stress",
     "resolve_barostat",
